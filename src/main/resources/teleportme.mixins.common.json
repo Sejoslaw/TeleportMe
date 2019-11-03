@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "com.github.sejoslaw.teleportme.mixins",
+  "compatibilityLevel": "JAVA_8",
+  "mixins": [
+    "CommandManagerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "minVersion": "0.7.11"
+}
