@@ -6,10 +6,12 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import net.minecraft.command.arguments.EntityArgumentType;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.dimension.DimensionType;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -22,6 +24,7 @@ import java.util.stream.StreamSupport;
 @Mixin(CommandManager.class)
 public class CommandManagerMixin {
     private static final String COMMAND = "tpme";
+    private static final String PLAYER_NAME = "playerName";
     private static final String DIM_ID = "dimensionId";
     private static final String POS_X = "x";
     private static final String POS_Y = "y";
@@ -42,7 +45,9 @@ public class CommandManagerMixin {
     private LiteralArgumentBuilder<ServerCommandSource> getCommand() {
         LiteralArgumentBuilder<ServerCommandSource> command = CommandManager
                 .literal(COMMAND)
-                .requires(cs -> cs.hasPermissionLevel(2))
+                .then(CommandManager
+                        .argument(PLAYER_NAME, EntityArgumentType.player())
+                        .executes(this::executeCommandForPlayer))
                 .then(CommandManager
                         .argument(DIM_ID, IntegerArgumentType.integer())
                         .then(CommandManager
@@ -51,16 +56,22 @@ public class CommandManagerMixin {
                                         .argument(POS_Y, DoubleArgumentType.doubleArg())
                                         .then(CommandManager
                                                 .argument(POS_Z, DoubleArgumentType.doubleArg())
-                                                .executes(this::executeCommand)))));
+                                                .executes(this::executeCommandForPosition)))));
         return command;
     }
 
-    private int executeCommand(CommandContext<ServerCommandSource> ctx) throws CommandSyntaxException {
-        int dimId = IntegerArgumentType.getInteger(ctx, DIM_ID);
+    private int executeCommandForPlayer(CommandContext<ServerCommandSource> ctx) throws CommandSyntaxException {
+        ServerPlayerEntity targetPlayer = EntityArgumentType.getPlayer(ctx, PLAYER_NAME);
+        ServerPlayerEntity serverPlayerEntity = ctx.getSource().getPlayer();
+        Vec3d targetPlayerPosition = targetPlayer.getPos();
 
-        double posX = DoubleArgumentType.getDouble(ctx, POS_X);
-        double posY = DoubleArgumentType.getDouble(ctx, POS_Y);
-        double posZ = DoubleArgumentType.getDouble(ctx, POS_Z);
+        serverPlayerEntity.teleport((ServerWorld) targetPlayer.world, targetPlayerPosition.x, targetPlayerPosition.y, targetPlayerPosition.z, serverPlayerEntity.yaw, serverPlayerEntity.pitch);
+
+        return 0;
+    }
+
+    private int executeCommandForPosition(CommandContext<ServerCommandSource> ctx) throws CommandSyntaxException {
+        int dimId = IntegerArgumentType.getInteger(ctx, DIM_ID);
 
         DimensionType destinationDimension = StreamSupport
                 .stream(DimensionType.getAll().spliterator(), false)
@@ -71,6 +82,10 @@ public class CommandManagerMixin {
         if (destinationDimension == null) {
             return -1;
         }
+
+        double posX = DoubleArgumentType.getDouble(ctx, POS_X);
+        double posY = DoubleArgumentType.getDouble(ctx, POS_Y);
+        double posZ = DoubleArgumentType.getDouble(ctx, POS_Z);
 
         ServerPlayerEntity serverPlayerEntity = ctx.getSource().getPlayer();
         ServerWorld destinationWorld = ctx.getSource().getMinecraftServer().getWorld(destinationDimension);
